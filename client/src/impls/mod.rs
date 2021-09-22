@@ -10,8 +10,8 @@ cfg_if! {
         pub use self::miniquad::client_socket::ClientSocket;
     }
     else {
-        mod native;
-        pub use native::message_sender::MessageSender;
-        pub use native::client_socket::ClientSocket;
+        mod native_webrtc;
+        pub use native_webrtc::message_sender::MessageSender;
+        pub use native_webrtc::client_socket::ClientSocket;
     }
 }

@@ -4,7 +4,6 @@
 
 #![deny(
     missing_docs,
-    missing_debug_implementations,
     unstable_features,
     unused_import_braces,
     unused_qualifications

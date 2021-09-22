@@ -4,7 +4,6 @@ use crate::MessageSender;
 
 use super::{client_socket::ClientSocketTrait, error::NaiaClientSocketError, packet::Packet};
 
-#[derive(Debug)]
 pub struct LinkConditioner {
     config: LinkConditionerConfig,
     inner_socket: Box<dyn ClientSocketTrait>,

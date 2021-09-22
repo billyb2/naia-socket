@@ -35,3 +35,7 @@ web_sys = { version = "0.3.22", package = "web-sys", features = [
 serde = { version = "^1.0.59", optional = true  }
 serde_derive = { version = "^1.0.59", optional = true  }
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }
+webrtc = { git = "https://github.com/webrtc-rs/webrtc" }
+hyper = { version =  "0.14", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"

@@ -7,11 +7,11 @@ use crate::MessageSender;
 
 cfg_if! {
     if #[cfg(feature = "multithread")] {
-        pub trait ClientSocketBaseTrait: Debug + Send + Sync {}
-        impl < T > ClientSocketBaseTrait for T where T: Debug + Send + Sync {}
+        pub trait ClientSocketBaseTrait: Send + Sync {}
+        impl < T > ClientSocketBaseTrait for T where T: Send + Sync {}
     } else {
-        pub trait ClientSocketBaseTrait: Debug {}
-        impl < T > ClientSocketBaseTrait for T where T: Debug {}
+        pub trait ClientSocketBaseTrait {}
+        impl < T > ClientSocketBaseTrait for T {}
     }
 }
 /// Defines the functionality of a Naia Client Socket

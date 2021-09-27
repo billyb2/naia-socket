@@ -13,6 +13,8 @@ use naia_socket_shared::{LinkConditionerConfig, Ref};
 use super::webrtc_internal::webrtc_initialize;
 use tokio::runtime::{Runtime, Builder};
 
+use std::sync::Arc;
+
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
 pub struct ClientSocket {
@@ -20,7 +22,6 @@ pub struct ClientSocket {
     message_queue: Ref<VecDeque<Result<Option<Packet>, NaiaClientSocketError>>>,
     message_sender: MessageSender,
     dropped_outgoing_messages: Ref<VecDeque<Packet>>,
-    tokio_rt: Runtime,
 
 }
 
@@ -34,7 +35,6 @@ impl ClientSocket {
         .unwrap();
 
         let data_channel = tokio_rt.block_on(async { webrtc_initialize(server_socket_address, message_queue.clone()).await });
-
         let dropped_outgoing_messages = Ref::new(VecDeque::new());
 
         let message_sender = MessageSender::new(data_channel, dropped_outgoing_messages.clone());
@@ -45,7 +45,6 @@ impl ClientSocket {
             message_queue,
             message_sender,
             dropped_outgoing_messages,
-            tokio_rt,
         })
     }
 }
@@ -66,14 +65,10 @@ impl ClientSocketTrait for ClientSocket {
                 Some(dropped_packets)
             } {
                 for dropped_packet in dropped_packets {
-                    let arc_messagesender = Ref::new(&mut self.message_sender);
-
-                    self.tokio_rt.block_on(async { 
-                        arc_messagesender.borrow_mut().send(dropped_packet)
-                        .unwrap_or_else(|err| {
-                            info!("Can't send dropped packet. Original Error: {:?}", err)
-                        })
-                    });
+                    self.message_sender.send(dropped_packet)
+                    .unwrap_or_else(|err| {
+                        info!("Can't send dropped packet. Original Error: {:?}", err)
+                    })
                 }
             }
         }

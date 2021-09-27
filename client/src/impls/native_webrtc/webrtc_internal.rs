@@ -11,6 +11,8 @@ use crate::{error::NaiaClientSocketError, Packet};
 
 use naia_socket_shared::Ref;
 
+use serde_json::Value;
+
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -21,18 +23,18 @@ use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
 use webrtc::util::math_rand_alpha;
+use webrtc::peer::sdp::sdp_type::RTCSdpType;
+
 use tokio::sync::Mutex;
-use hyper::service::{make_service_fn, service_fn};
 
-
-use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
+use reqwest::Client;
 
 
 #[allow(unused_must_use)]
 pub async fn webrtc_initialize(
     socket_address: SocketAddr,
     msg_queue: Ref<VecDeque<Result<Option<Packet>, NaiaClientSocketError>>>,
-) -> RTCDataChannel {
+) -> Arc<RTCDataChannel> {
     let server_url_str = format!("http://{}/new_rtc_session", socket_address);
 
     // Create a MediaEngine object to configure the supported codec
@@ -61,13 +63,13 @@ pub async fn webrtc_initialize(
 
     peer_conn
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+            info!("Peer Connection State has changed: {}", s);
 
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
+                info!("Peer Connection has gone to failed exiting");
                 std::process::exit(0);
             }
 
@@ -75,11 +77,7 @@ pub async fn webrtc_initialize(
         }))
         .await;
 
-    let d1 = Arc::clone(&data_channel);
     data_channel.on_open(Box::new(move || {
-        println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d1.label(), d1.id());
-
-        let d2 = Arc::clone(&d1);
         Box::pin(async {})
     })).await;
 
@@ -95,6 +93,8 @@ pub async fn webrtc_initialize(
 
     let PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
 
+    //let mut candidate_init_dict: RtcIceCandidateInit = RtcIceCandidateInit::new(session_response.candidate.candidate.as_str());
+
      // When an ICE candidate is available send to the other Pion instance
     // the other Pion instance will add this candidate by calling AddICECandidate
     let peer_connection2 = Arc::clone(&peer_conn);
@@ -102,61 +102,46 @@ pub async fn webrtc_initialize(
     let addr2 = socket_address.clone();
 
     let offer = peer_conn.create_offer(None).await.unwrap();
+    peer_conn.set_local_description(offer.clone()).await.unwrap();
 
-    // Send our offer to the HTTP server listening in the other process
-    let payload = match serde_json::to_string(&offer) {
-        Ok(p) => p,
-        Err(err) => panic!("{}", err),
-    };
+    // Send our offer to the HTTP server listening in the other process    
+    let client = Client::new();
 
+    let req = client.post(server_url_str).header("content-type", "application/json").header("accept", "application/json, text/plain, */*").body(offer.sdp.clone());
 
-    let req = match Request::builder()
-            .method(Method::POST)
-            .uri(server_url_str)
-            .header("content-type", "application/json; charset=utf-8")
-            .body(Body::from(payload.clone()))
-        {
-            Ok(req) => req,
-            Err(err) => panic!("{}", err),
-        };
-
-    let resp = match Client::new().request(req).await {
+    let resp = match req.send().await {
         Ok(resp) => resp,
         Err(err) => {
-            panic!("{}", err);
+            panic!("Could not send request, original error: {:?}", err);
         }
     };
-    let response_string: String = payload;
+    let mut response_string = resp.text().await.unwrap();
 
-    peer_conn.set_local_description(offer).await.unwrap();
+    let answer_json_str = serde_json::from_str::<Value>(&response_string).unwrap()["answer"].to_string();
+    let mut answer = serde_json::from_str::<RTCSessionDescription>(&answer_json_str).unwrap();
+
+    peer_conn.set_remote_description(answer).await.unwrap();
 
     let peer_connection2 = Arc::clone(&peer_conn);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     peer_conn
         .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            //println!("on_ice_candidate {:?}", c);
-
             let peer_connection3 = Arc::clone(&peer_connection2);
             let pending_candidates3 = Arc::clone(&pending_candidates2);
             let addr3 = addr2.clone();
             Box::pin(async move {
-                let c = c.unwrap();
-                let desc = peer_connection3.remote_description().await;
-                if desc.is_none() {
-                    let mut cs = pending_candidates3.lock().await;
-                    cs.push(c);
+                if let Some(c) = c {
+                    let desc = peer_connection3.remote_description().await;
+                    if desc.is_none() {
+                        let mut cs = pending_candidates3.lock().await;
+                        cs.push(c);
+                    }
                 }
             })
         }))
         .await;
 
 
-    if let Ok(data_channel) = Arc::try_unwrap(data_channel) {
-        data_channel
-
-    } else {
-        panic!("Error!");
-
-    }
+    data_channel
 
 }

@@ -19,6 +19,7 @@ maintenance = { status = "actively-developed" }
 multithread = [ "naia-socket-shared/multithread" ]
 wbindgen = [ "naia-socket-shared/wbindgen", "url", "wasm-bindgen", "js-sys", "web_sys", "serde", "serde_derive" ]
 mquad = [ "naia-socket-shared/mquad", "miniquad" ]
+native_webrtc = [ "multithread", "webrtc" ]
 
 [dependencies]
 log = { version = "0.4" }
@@ -35,7 +36,7 @@ web_sys = { version = "0.3.22", package = "web-sys", features = [
 serde = { version = "^1.0.59", optional = true  }
 serde_derive = { version = "^1.0.59", optional = true  }
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }
-webrtc = { git = "https://github.com/webrtc-rs/webrtc" }
+webrtc = { version = "0.1", optional = true }
 hyper = { version =  "0.14", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"

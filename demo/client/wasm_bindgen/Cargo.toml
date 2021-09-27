@@ -17,6 +17,7 @@ path = "src/main.rs"
 [features]
 multithread = [ "naia-client-socket/multithread" ]
 wbindgen = [ "naia-client-socket/wbindgen" ]
+native_webrtc = ["naia-client-socket/native_webrtc" ]
 
 [dependencies]
 naia-client-socket = { path = "../../../client" }

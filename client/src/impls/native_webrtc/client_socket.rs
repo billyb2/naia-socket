@@ -70,7 +70,6 @@ impl ClientSocketTrait for ClientSocket {
 
                     self.tokio_rt.block_on(async { 
                         arc_messagesender.borrow_mut().send(dropped_packet)
-                        .await
                         .unwrap_or_else(|err| {
                             info!("Can't send dropped packet. Original Error: {:?}", err)
                         })

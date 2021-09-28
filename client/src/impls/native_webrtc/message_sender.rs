@@ -39,7 +39,10 @@ impl MessageSender {
 
     /// Send a Packet to the Server
     pub fn send(&mut self, packet: Packet) -> Result<(), Box<dyn Error + Send + Sync>> {
-        if let Err(_) = self.tokio_rt.block_on(self.data_channel.send(&Bytes::copy_from_slice(&packet.payload()))) {
+        self.tokio_rt.block_on(self.data_channel.send_text("Hello".to_string()));
+        if let Err(e) = self.tokio_rt.block_on(self.data_channel.send(&Bytes::copy_from_slice(&packet.payload()))) {
+            log::info!("Couldn't send packet {:?}", e);
+            
             self.dropped_outgoing_messages
                 .borrow_mut()
                 .push_back(packet);

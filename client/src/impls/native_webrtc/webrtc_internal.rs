@@ -1,8 +1,8 @@
 extern crate log;
 use log::info;
-use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
+use webrtc::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 
-//TODO: Parking Lot Mutex
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::VecDeque, net::SocketAddr};
@@ -87,6 +87,7 @@ pub async fn webrtc_initialize(
             msg_queue.borrow_mut().push_back(Ok(Some(
                 Packet::new_raw(msg.data.as_ref().into()
             ))));
+            info!("Message: {:?}", msg);
             Box::pin(async {})
         }))
         .await;
@@ -117,10 +118,27 @@ pub async fn webrtc_initialize(
     };
     let mut response_string = resp.text().await.unwrap();
 
-    let answer_json_str = serde_json::from_str::<Value>(&response_string).unwrap()["answer"].to_string();
-    let mut answer = serde_json::from_str::<RTCSessionDescription>(&answer_json_str).unwrap();
+    let json_resp = serde_json::from_str::<Value>(&response_string).unwrap();
+    let answer_json_str = json_resp["answer"].to_string();
+    let ice_candidate_json_str = json_resp["candidate"].to_string();
+
+    info!("\n\n\n{:?}\n\n\n", &json_resp["candidate"]["candidate"].as_str().unwrap().to_owned());
+
+    let answer = serde_json::from_str::<RTCSessionDescription>(&answer_json_str).unwrap();
+    let ice_candidate = RTCIceCandidateInit {
+        candidate: json_resp["candidate"]["candidate"].as_str().unwrap().to_owned(),
+        sdp_mid: json_resp["candidate"]["sdpMid"].as_str().unwrap().to_owned(),
+        sdp_mline_index: u16::try_from(json_resp["candidate"]["sdpMLineIndex"].as_u64().unwrap()).ok().unwrap(),
+        ..Default::default()
+        
+    };
 
     peer_conn.set_remote_description(answer).await.unwrap();
+
+    if let Err(e) = peer_conn.add_ice_candidate(ice_candidate).await {
+        panic!("Error on adding ice candidate: {:?}", e);
+
+    };
 
     let peer_connection2 = Arc::clone(&peer_conn);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
@@ -131,6 +149,8 @@ pub async fn webrtc_initialize(
             let addr3 = addr2.clone();
             Box::pin(async move {
                 if let Some(c) = c {
+                    info!("ICE \n\n\n\n\n\n\nCANDIDATE!!!!!!! {}", serde_json::to_string(&c).unwrap());
+
                     let desc = peer_connection3.remote_description().await;
                     if desc.is_none() {
                         let mut cs = pending_candidates3.lock().await;
